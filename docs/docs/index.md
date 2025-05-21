@@ -97,6 +97,17 @@ OPENAI_API_KEY=XXX
 ANTHROPIC_API_KEY=XXX
 ```
 
+If you are using Amazon Bedrock and prefer AWS Single Sign-On instead of long-lived credentials,
+first run `aws sso login --profile <profile>`. Then set the following in your `.env.local`:
+
+```bash
+AWS_PROFILE=<profile>
+AWS_REGION=<your-bedrock-region>
+AWS_SDK_LOAD_CONFIG=1
+```
+
+Leave `AWS_BEDROCK_CONFIG` empty and the application will load credentials from the AWS profile.
+
 Once you've set your keys, you can proceed with running the app. You will set these keys up during the initial setup, and you can revisit and update them later after the app is running.
 
 **Note**: Never commit your `.env.local` file to version control. It’s already included in the `.gitignore`.

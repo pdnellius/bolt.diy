@@ -107,12 +107,41 @@ export default class AmazonBedrockProvider extends BaseProvider {
       defaultApiTokenKey: 'AWS_BEDROCK_CONFIG',
     });
 
-    if (!apiKey) {
-      throw new Error(`Missing API key for ${this.name} provider`);
+    if (apiKey) {
+      const config = this._parseAndValidateConfig(apiKey);
+      const bedrock = createAmazonBedrock(config);
+
+      return bedrock(model);
     }
 
-    const config = this._parseAndValidateConfig(apiKey);
-    const bedrock = createAmazonBedrock(config);
+    const region =
+      serverEnv?.AWS_REGION ||
+      process.env.AWS_REGION ||
+      serverEnv?.AWS_DEFAULT_REGION ||
+      process.env.AWS_DEFAULT_REGION;
+
+    if (!region) {
+      throw new Error(
+        `Missing AWS region. Provide AWS_BEDROCK_CONFIG with region or set AWS_REGION when using AWS SSO credentials`,
+      );
+    }
+
+    const bedrockOptions: Record<string, any> = { region };
+
+    if (typeof process !== 'undefined' && process.release?.name === 'node') {
+      try {
+        // eslint-disable-next-line no-eval
+        const nodeRequire = eval('require');
+        const { defaultProvider } = nodeRequire('@aws-sdk/credential-provider-node');
+        bedrockOptions.credentials = defaultProvider();
+      } catch {
+        // If the Node credential provider is unavailable, continue without it
+      }
+    }
+
+    const bedrock = createAmazonBedrock({
+      bedrockOptions,
+    });
 
     return bedrock(model);
   }
