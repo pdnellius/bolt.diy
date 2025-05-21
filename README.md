@@ -192,6 +192,21 @@ This option requires some familiarity with Docker but provides a more isolated e
    docker compose --profile development up
    ```
 
+   If you're using AWS Single Sign-On credentials for Amazon Bedrock, make sure
+   your `.env.local` contains:
+
+   ```bash
+   AWS_PROFILE=<profile>
+   AWS_REGION=<bedrock-region>
+   AWS_BEDROCK_CONFIG=
+   ```
+
+   Then start the container with those environment variables:
+
+   ```bash
+   AWS_PROFILE=<profile> AWS_REGION=<bedrock-region> docker compose --profile development up
+   ```
+
 ## Configuring API Keys and Providers
 
 ### Adding Your API Keys
