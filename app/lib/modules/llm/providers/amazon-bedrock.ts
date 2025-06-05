@@ -123,7 +123,7 @@ export default class AmazonBedrockProvider extends BaseProvider {
     const bedrock = createAmazonBedrock(
       accessKeyId && secretAccessKey
         ? { region, accessKeyId, secretAccessKey, sessionToken }
-        : { region },
+        : { bedrockOptions: { region } },
     );
 
     return bedrock(model);

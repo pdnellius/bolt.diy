@@ -30,7 +30,9 @@ describe('AmazonBedrockProvider', () => {
       apiKeys: {},
       providerSettings: {},
     });
-    expect(createAmazonBedrock).toHaveBeenCalledWith({ region: 'us-west-2' });
+    expect(createAmazonBedrock).toHaveBeenCalledWith({
+      bedrockOptions: { region: 'us-west-2' },
+    });
     if (originalConfig !== undefined) {
       process.env.AWS_BEDROCK_CONFIG = originalConfig;
     }
