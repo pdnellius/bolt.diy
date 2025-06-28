@@ -6,8 +6,8 @@ import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 
 interface AWSBedRockConfig {
   region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   sessionToken?: string;
 }
 
@@ -71,22 +71,25 @@ export default class AmazonBedrockProvider extends BaseProvider {
       parsedConfig = JSON.parse(apiKey);
     } catch {
       throw new Error(
-        'Invalid AWS Bedrock configuration format. Please provide a valid JSON string containing region, accessKeyId, and secretAccessKey.',
+        'Invalid AWS Bedrock configuration format. Please provide a valid JSON string containing region and optionally accessKeyId and secretAccessKey.',
       );
     }
 
     const { region, accessKeyId, secretAccessKey, sessionToken } = parsedConfig;
 
-    if (!region || !accessKeyId || !secretAccessKey) {
-      throw new Error(
-        'Missing required AWS credentials. Configuration must include region, accessKeyId, and secretAccessKey.',
-      );
+    if (!region) {
+      throw new Error('Missing required AWS region. Configuration must include region.');
+    }
+
+    // If accessKeyId or secretAccessKey is provided, both must be provided
+    if ((accessKeyId && !secretAccessKey) || (!accessKeyId && secretAccessKey)) {
+      throw new Error('When providing explicit credentials, both accessKeyId and secretAccessKey must be specified.');
     }
 
     return {
       region,
-      accessKeyId,
-      secretAccessKey,
+      ...(accessKeyId && { accessKeyId }),
+      ...(secretAccessKey && { secretAccessKey }),
       ...(sessionToken && { sessionToken }),
     };
   }
@@ -112,7 +115,25 @@ export default class AmazonBedrockProvider extends BaseProvider {
     }
 
     const config = this._parseAndValidateConfig(apiKey);
-    const bedrock = createAmazonBedrock(config);
+
+    // If explicit credentials are provided, use them. Otherwise, let AWS SDK use default credential chain (includes SSO)
+    const bedrockConfig =
+      config.accessKeyId && config.secretAccessKey
+        ? {
+            region: config.region,
+            credentials: {
+              accessKeyId: config.accessKeyId,
+              secretAccessKey: config.secretAccessKey,
+              ...(config.sessionToken && { sessionToken: config.sessionToken }),
+            },
+          }
+        : {
+            region: config.region,
+
+            // No credentials specified - AWS SDK will use default credential chain (includes SSO)
+          };
+
+    const bedrock = createAmazonBedrock(bedrockConfig);
 
     return bedrock(model);
   }
