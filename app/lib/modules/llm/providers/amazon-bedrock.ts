@@ -121,16 +121,17 @@ export default class AmazonBedrockProvider extends BaseProvider {
       config.accessKeyId && config.secretAccessKey
         ? {
             region: config.region,
-            credentials: {
-              accessKeyId: config.accessKeyId,
-              secretAccessKey: config.secretAccessKey,
-              ...(config.sessionToken && { sessionToken: config.sessionToken }),
-            },
+            accessKeyId: config.accessKeyId,
+            secretAccessKey: config.secretAccessKey,
+            ...(config.sessionToken && { sessionToken: config.sessionToken }),
           }
         : {
-            region: config.region,
+            // Use bedrockOptions to avoid credential loading and let AWS SDK use default credential chain
+            bedrockOptions: {
+              region: config.region,
 
-            // No credentials specified - AWS SDK will use default credential chain (includes SSO)
+              // No credentials specified - AWS SDK will use default credential chain (includes SSO)
+            },
           };
 
     const bedrock = createAmazonBedrock(bedrockConfig);
