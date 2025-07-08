@@ -18,4 +18,9 @@ interface Env {
   XAI_API_KEY: string;
   PERPLEXITY_API_KEY: string;
   AWS_BEDROCK_CONFIG: string;
+  AWS_SSO_PROFILE: string;
+  AWS_SSO_REGION: string;
+  AWS_SSO_START_URL: string;
+  AWS_SSO_ACCOUNT_ID: string;
+  AWS_SSO_ROLE_NAME: string;
 }

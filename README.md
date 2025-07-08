@@ -79,6 +79,7 @@ project, please check the [project management guide](./PROJECT.md) to get starte
 - ✅ Add Starter Template Options (@thecodacus)
 - ✅ Perplexity Integration (@meetpateltech)
 - ✅ AWS Bedrock Integration (@kunjabijukchhe)
+- ✅ AWS SSO Login for Bedrock (New in this release)
 - ✅ Add a "Diff View" to see the changes (@toddyclipsgg)
 - ⬜ **HIGH PRIORITY** - Prevent bolt from rewriting files as often (file locking and diffs)
 - ⬜ **HIGH PRIORITY** - Better prompting for smaller LLMs (code window sometimes doesn't start)
@@ -219,11 +220,55 @@ For providers that support custom base URLs (such as Ollama or LM Studio), follo
 
 > **Note**: Custom base URLs are particularly useful when running local instances of AI models or using custom API endpoints.
 
+### AWS SSO Authentication for Bedrock
+
+For enhanced security with AWS Bedrock, you can now use AWS SSO instead of static credentials:
+
+1. **Install AWS CLI** if not already installed
+2. **Configure AWS SSO profile** in `~/.aws/config`:
+   ```ini
+   [profile my-sso-profile]
+   sso_start_url = https://your-sso-portal.awsapps.com/start
+   sso_region = us-east-1
+   sso_account_id = 123456789012
+   sso_role_name = YourRoleName
+   region = us-east-1
+   ```
+
+3. **Login to AWS SSO**:
+   ```bash
+   aws sso login --profile my-sso-profile
+   ```
+
+4. **Configure Bolt.diy** with SSO authentication:
+   ```json
+   {
+     "authType": "sso",
+     "profile": "my-sso-profile",
+     "region": "us-east-1"
+   }
+   ```
+
+5. **Alternative direct SSO config** (without profiles):
+   ```json
+   {
+     "authType": "sso",
+     "region": "us-east-1",
+     "ssoStartUrl": "https://your-sso-portal.awsapps.com/start",
+     "ssoRegion": "us-east-1",
+     "ssoAccountId": "123456789012",
+     "ssoRoleName": "YourRoleName"
+   }
+   ```
+
+📖 **For detailed setup instructions, see [docs/aws-sso-setup.md](docs/aws-sso-setup.md)**
+
 ### Supported Providers
 
 - Ollama
 - LM Studio
 - OpenAILike
+- AWS Bedrock (with static credentials or SSO authentication)
 
 ## Setup Using Git (For Developers only)
 
