@@ -107,12 +107,17 @@ export default class AmazonBedrockProvider extends BaseProvider {
       defaultApiTokenKey: 'AWS_BEDROCK_CONFIG',
     });
 
-    if (!apiKey) {
-      throw new Error(`Missing API key for ${this.name} provider`);
+    if (apiKey) {
+      const config = this._parseAndValidateConfig(apiKey);
+      const bedrock = createAmazonBedrock(config);
+
+      return bedrock(model);
     }
 
-    const config = this._parseAndValidateConfig(apiKey);
-    const bedrock = createAmazonBedrock(config);
+    const region = serverEnv?.AWS_REGION || process.env.AWS_REGION || 'us-east-1';
+    const bedrock = createAmazonBedrock({
+      region,
+    });
 
     return bedrock(model);
   }
