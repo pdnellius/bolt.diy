@@ -6,8 +6,8 @@ import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 
 interface AWSBedRockConfig {
   region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   sessionToken?: string;
 }
 
@@ -71,22 +71,26 @@ export default class AmazonBedrockProvider extends BaseProvider {
       parsedConfig = JSON.parse(apiKey);
     } catch {
       throw new Error(
-        'Invalid AWS Bedrock configuration format. Please provide a valid JSON string containing region, accessKeyId, and secretAccessKey.',
+        'Invalid AWS Bedrock configuration format. Please provide a valid JSON string containing region and either explicit credentials (accessKeyId, secretAccessKey) or use AWS credential chain (SSO, environment variables, etc.).',
       );
     }
 
     const { region, accessKeyId, secretAccessKey, sessionToken } = parsedConfig;
 
-    if (!region || !accessKeyId || !secretAccessKey) {
-      throw new Error(
-        'Missing required AWS credentials. Configuration must include region, accessKeyId, and secretAccessKey.',
-      );
+    if (!region) {
+      throw new Error('Missing required AWS region. Configuration must include region.');
+    }
+
+    if (accessKeyId || secretAccessKey) {
+      if (!accessKeyId || !secretAccessKey) {
+        throw new Error('When using explicit credentials, both accessKeyId and secretAccessKey are required.');
+      }
     }
 
     return {
       region,
-      accessKeyId,
-      secretAccessKey,
+      ...(accessKeyId && { accessKeyId }),
+      ...(secretAccessKey && { secretAccessKey }),
       ...(sessionToken && { sessionToken }),
     };
   }
@@ -115,9 +119,22 @@ export default class AmazonBedrockProvider extends BaseProvider {
     }
 
     const region = serverEnv?.AWS_REGION || process.env.AWS_REGION || 'us-east-1';
-    const bedrock = createAmazonBedrock({
-      region,
-    });
+    const accessKeyId = serverEnv?.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = serverEnv?.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+    const sessionToken = serverEnv?.AWS_SESSION_TOKEN || process.env.AWS_SESSION_TOKEN;
+
+    const bedrockConfig: any = { region };
+
+    if (accessKeyId && secretAccessKey) {
+      bedrockConfig.accessKeyId = accessKeyId;
+      bedrockConfig.secretAccessKey = secretAccessKey;
+
+      if (sessionToken) {
+        bedrockConfig.sessionToken = sessionToken;
+      }
+    }
+
+    const bedrock = createAmazonBedrock(bedrockConfig);
 
     return bedrock(model);
   }
