@@ -111,13 +111,28 @@ export default class AmazonBedrockProvider extends BaseProvider {
       defaultApiTokenKey: 'AWS_BEDROCK_CONFIG',
     });
 
+    console.log('[AmazonBedrock] Configuration debug:', {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0,
+      model,
+      serverEnvKeys: Object.keys(serverEnv || {}),
+    });
+
     if (apiKey && typeof apiKey === 'string' && apiKey.trim().length > 0) {
       try {
         const config = this._parseAndValidateConfig(apiKey);
+        console.log('[AmazonBedrock] Using explicit credentials from config:', {
+          region: config.region,
+          hasAccessKeyId: !!config.accessKeyId,
+          hasSecretAccessKey: !!config.secretAccessKey,
+          hasSessionToken: !!config.sessionToken,
+        });
+
         const bedrock = createAmazonBedrock(config);
 
         return bedrock(model);
       } catch (error) {
+        console.error('[AmazonBedrock] Error parsing config:', error);
         throw error;
       }
     }
@@ -126,6 +141,14 @@ export default class AmazonBedrockProvider extends BaseProvider {
     const accessKeyId = serverEnv?.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
     const secretAccessKey = serverEnv?.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
     const sessionToken = serverEnv?.AWS_SESSION_TOKEN || process.env.AWS_SESSION_TOKEN;
+
+    console.log('[AmazonBedrock] Using credential chain:', {
+      region,
+      hasAccessKeyId: !!accessKeyId,
+      hasSecretAccessKey: !!secretAccessKey,
+      hasSessionToken: !!sessionToken,
+      usingCredentialProvider: !accessKeyId || !secretAccessKey,
+    });
 
     const bedrockConfig: any = { region };
 
@@ -136,6 +159,13 @@ export default class AmazonBedrockProvider extends BaseProvider {
       if (sessionToken) {
         bedrockConfig.sessionToken = sessionToken;
       }
+
+      console.log('[AmazonBedrock] Using explicit environment credentials');
+    } else {
+      bedrockConfig.credentialProvider = async () => {
+        console.log('[AmazonBedrock] Using AWS credential chain for authentication');
+        return undefined;
+      };
     }
 
     const bedrock = createAmazonBedrock(bedrockConfig);
