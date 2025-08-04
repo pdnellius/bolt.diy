@@ -4,6 +4,18 @@ import type { LanguageModelV1 } from 'ai';
 import type { IProviderSetting } from '~/types/model';
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 
+let credentialProvider: any = null;
+
+if (typeof window === 'undefined') {
+  try {
+    import('@aws-sdk/credential-providers').then(({ fromNodeProviderChain }) => {
+      credentialProvider = fromNodeProviderChain;
+    });
+  } catch (error) {
+    console.warn('[AmazonBedrock] Failed to load credential provider:', error);
+  }
+}
+
 interface AWSBedRockConfig {
   region: string;
   accessKeyId?: string;
@@ -128,6 +140,22 @@ export default class AmazonBedrockProvider extends BaseProvider {
           hasSessionToken: !!config.sessionToken,
         });
 
+        if (!config.accessKeyId || !config.secretAccessKey) {
+          console.log('[AmazonBedrock] No explicit credentials in config, using AWS credential chain');
+
+          const bedrockConfig: any = {
+            region: config.region,
+          };
+
+          if (credentialProvider) {
+            bedrockConfig.credentialProvider = credentialProvider();
+          }
+
+          const bedrock = createAmazonBedrock(bedrockConfig);
+
+          return bedrock(model);
+        }
+
         const bedrock = createAmazonBedrock(config);
 
         return bedrock(model);
@@ -162,10 +190,11 @@ export default class AmazonBedrockProvider extends BaseProvider {
 
       console.log('[AmazonBedrock] Using explicit environment credentials');
     } else {
-      bedrockConfig.credentialProvider = async () => {
-        console.log('[AmazonBedrock] Using AWS credential chain for authentication');
-        return undefined;
-      };
+      console.log('[AmazonBedrock] Using AWS credential chain for authentication');
+
+      if (credentialProvider) {
+        bedrockConfig.credentialProvider = credentialProvider();
+      }
     }
 
     const bedrock = createAmazonBedrock(bedrockConfig);
