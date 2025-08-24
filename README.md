@@ -219,11 +219,70 @@ For providers that support custom base URLs (such as Ollama or LM Studio), follo
 
 > **Note**: Custom base URLs are particularly useful when running local instances of AI models or using custom API endpoints.
 
+### Configuring AWS Bedrock
+
+AWS Bedrock requires special configuration as it uses AWS credentials rather than a simple API key. bolt.diy supports two methods for AWS authentication:
+
+#### Option 1: Explicit AWS Credentials (Traditional)
+
+For users who prefer to use explicit AWS credentials:
+
+1. Select "AmazonBedrock" from the provider dropdown
+2. Click the pencil (edit) icon
+3. Enter a JSON configuration with your AWS credentials:
+
+```json
+{
+  "region": "us-east-1",
+  "accessKeyId": "your-access-key-id",
+  "secretAccessKey": "your-secret-access-key"
+}
+```
+
+#### Option 2: AWS SSO / Default Credential Chain (Recommended)
+
+For users with AWS SSO or other AWS credential configurations:
+
+1. **Set up AWS SSO** (one-time setup):
+   ```bash
+   aws configure sso
+   # Follow the prompts to configure your SSO profile
+   
+   aws sso login
+   # Authenticate with your SSO provider
+   ```
+
+2. **Configure bolt.diy** to use SSO:
+   - Select "AmazonBedrock" from the provider dropdown
+   - Click the pencil (edit) icon
+   - Enter a JSON configuration with only the region:
+
+   ```json
+   {
+     "region": "us-east-1"
+   }
+   ```
+
+3. bolt.diy will automatically use your AWS SSO credentials or any other credentials from the [AWS credential chain](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/setting-credentials-node.html)
+
+#### Available AWS Bedrock Models
+
+- Claude 3.5 Sonnet v2 (Bedrock)
+- Claude 3.5 Sonnet (Bedrock)  
+- Claude 3 Sonnet (Bedrock)
+- Claude 3 Haiku (Bedrock)
+- Amazon Nova Pro (Bedrock)
+- Amazon Nova Lite (Bedrock)
+- Mistral Large 24.02 (Bedrock)
+
+> **Note**: You must have access to these models in your AWS Bedrock account. Some models may require requesting access through the AWS Console.
+
 ### Supported Providers
 
 - Ollama
-- LM Studio
+- LM Studio  
 - OpenAILike
+- AWS Bedrock
 
 ## Setup Using Git (For Developers only)
 
