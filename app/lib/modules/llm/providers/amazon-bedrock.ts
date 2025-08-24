@@ -6,8 +6,8 @@ import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 
 interface AWSBedRockConfig {
   region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   sessionToken?: string;
 }
 
@@ -70,8 +70,11 @@ export default class AmazonBedrockProvider extends BaseProvider {
     },
   ];
 
-  private _parseAndValidateConfig(apiKey: string): AWSBedRockConfig {
-    let parsedConfig: AWSBedRockConfig;
+  private _parseAndValidateConfig(
+    apiKey: string,
+    serverEnv: Record<string, string> = {},
+  ): AWSBedRockConfig {
+    let parsedConfig: Partial<AWSBedRockConfig> = {};
 
     try {
       parsedConfig = JSON.parse(apiKey);
@@ -81,19 +84,25 @@ export default class AmazonBedrockProvider extends BaseProvider {
       );
     }
 
-    const { region, accessKeyId, secretAccessKey, sessionToken } = parsedConfig;
+    const region =
+      parsedConfig.region ||
+      serverEnv.AWS_BEDROCK_REGION ||
+      serverEnv.AWS_REGION ||
+      serverEnv.AWS_DEFAULT_REGION;
 
-    if (!region || !accessKeyId || !secretAccessKey) {
+    if (!region) {
       throw new Error(
-        'Missing required AWS credentials. Configuration must include region, accessKeyId, and secretAccessKey.',
+        'Missing AWS region. Provide it in AWS_BEDROCK_CONFIG or set AWS_BEDROCK_REGION.',
       );
     }
 
     return {
       region,
-      accessKeyId,
-      secretAccessKey,
-      ...(sessionToken && { sessionToken }),
+      ...(parsedConfig.accessKeyId && { accessKeyId: parsedConfig.accessKeyId }),
+      ...(parsedConfig.secretAccessKey && {
+        secretAccessKey: parsedConfig.secretAccessKey,
+      }),
+      ...(parsedConfig.sessionToken && { sessionToken: parsedConfig.sessionToken }),
     };
   }
 
@@ -113,12 +122,15 @@ export default class AmazonBedrockProvider extends BaseProvider {
       defaultApiTokenKey: 'AWS_BEDROCK_CONFIG',
     });
 
-    if (!apiKey) {
-      throw new Error(`Missing API key for ${this.name} provider`);
-    }
+    const configString = apiKey && apiKey.length > 0 ? apiKey : '{}';
 
-    const config = this._parseAndValidateConfig(apiKey);
-    const bedrock = createAmazonBedrock(config);
+    const config = this._parseAndValidateConfig(configString, serverEnv);
+    const { region, accessKeyId, secretAccessKey, sessionToken } = config;
+    const bedrock = createAmazonBedrock(
+      accessKeyId && secretAccessKey
+        ? { region, accessKeyId, secretAccessKey, sessionToken }
+        : { bedrockOptions: { region } },
+    );
 
     return bedrock(model);
   }

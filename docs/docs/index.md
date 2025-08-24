@@ -95,7 +95,10 @@ Make sure to add your API keys for each provider you want to use, for example:
 GROQ_API_KEY=XXX
 OPENAI_API_KEY=XXX
 ANTHROPIC_API_KEY=XXX
+AWS_BEDROCK_REGION=us-east-1
 ```
+
+For AWS Bedrock you can use credentials from the AWS CLI, including AWS SSO. When no `accessKeyId` or `secretAccessKey` are provided in `AWS_BEDROCK_CONFIG`, the SDK falls back to the default credential provider chain. Ensure you are logged in with `aws configure sso` (or other AWS authentication) and set `AWS_BEDROCK_REGION` to your Bedrock region.
 
 Once you've set your keys, you can proceed with running the app. You will set these keys up during the initial setup, and you can revisit and update them later after the app is running.
 
