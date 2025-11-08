@@ -119,7 +119,7 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
             content: `${message}`,
           },
         ],
-        model: providerInfo.getModelInstance({
+        model: await providerInfo.getModelInstance({
           model: modelDetails.name,
           serverEnv: context.cloudflare?.env as any,
           apiKeys,

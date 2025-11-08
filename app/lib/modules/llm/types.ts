@@ -21,7 +21,7 @@ export interface ProviderInfo {
     serverEnv: Env;
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
-  }) => LanguageModelV1;
+  }) => LanguageModelV1 | Promise<LanguageModelV1>;
   getApiKeyLink?: string;
   labelForGetApiKey?: string;
   icon?: string;

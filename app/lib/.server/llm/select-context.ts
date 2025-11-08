@@ -168,7 +168,7 @@ export async function selectContext(props: {
         * if the buffer is full, you need to exclude files that is not needed and include files that is relevent.
 
         `,
-    model: provider.getModelInstance({
+    model: await provider.getModelInstance({
       model: currentModel,
       serverEnv,
       apiKeys,

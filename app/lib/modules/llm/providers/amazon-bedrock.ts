@@ -3,11 +3,12 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { LanguageModelV1 } from 'ai';
 import type { IProviderSetting } from '~/types/model';
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 
 interface AWSBedRockConfig {
   region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   sessionToken?: string;
 }
 
@@ -77,32 +78,39 @@ export default class AmazonBedrockProvider extends BaseProvider {
       parsedConfig = JSON.parse(apiKey);
     } catch {
       throw new Error(
-        'Invalid AWS Bedrock configuration format. Please provide a valid JSON string containing region, accessKeyId, and secretAccessKey.',
+        'Invalid AWS Bedrock configuration format. Please provide a valid JSON string containing at minimum the region.',
       );
     }
 
     const { region, accessKeyId, secretAccessKey, sessionToken } = parsedConfig;
 
-    if (!region || !accessKeyId || !secretAccessKey) {
+    if (!region) {
       throw new Error(
-        'Missing required AWS credentials. Configuration must include region, accessKeyId, and secretAccessKey.',
+        'Missing required region. Configuration must include at minimum the region.',
+      );
+    }
+
+    // If any explicit credentials are provided, all required credentials must be present
+    if ((accessKeyId || secretAccessKey) && (!accessKeyId || !secretAccessKey)) {
+      throw new Error(
+        'Incomplete AWS credentials. If providing explicit credentials, both accessKeyId and secretAccessKey are required.',
       );
     }
 
     return {
       region,
-      accessKeyId,
-      secretAccessKey,
+      ...(accessKeyId && { accessKeyId }),
+      ...(secretAccessKey && { secretAccessKey }),
       ...(sessionToken && { sessionToken }),
     };
   }
 
-  getModelInstance(options: {
+  async getModelInstance(options: {
     model: string;
     serverEnv: any;
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
-  }): LanguageModelV1 {
+  }): Promise<LanguageModelV1> {
     const { model, serverEnv, apiKeys, providerSettings } = options;
 
     const { apiKey } = this.getProviderBaseUrlAndKey({
@@ -113,12 +121,38 @@ export default class AmazonBedrockProvider extends BaseProvider {
       defaultApiTokenKey: 'AWS_BEDROCK_CONFIG',
     });
 
-    if (!apiKey) {
-      throw new Error(`Missing API key for ${this.name} provider`);
+    let bedrockConfig: any;
+
+    if (apiKey) {
+      // Config provided - could be explicit credentials or just region
+      const config = this._parseAndValidateConfig(apiKey);
+
+      if (config.accessKeyId && config.secretAccessKey) {
+        // Explicit credentials provided - use them directly
+        bedrockConfig = config;
+      } else {
+        // Only region provided - use AWS credential provider chain (SSO support)
+        const credentialsProvider = fromNodeProviderChain();
+        const credentials = await credentialsProvider();
+
+        bedrockConfig = {
+          region: config.region,
+          ...credentials,
+        };
+      }
+    } else {
+      // No config provided - use AWS_REGION env var and credential provider chain
+      const region = serverEnv?.AWS_REGION || process?.env?.AWS_REGION || 'us-east-1';
+      const credentialsProvider = fromNodeProviderChain();
+      const credentials = await credentialsProvider();
+
+      bedrockConfig = {
+        region,
+        ...credentials,
+      };
     }
 
-    const config = this._parseAndValidateConfig(apiKey);
-    const bedrock = createAmazonBedrock(config);
+    const bedrock = createAmazonBedrock(bedrockConfig);
 
     return bedrock(model);
   }

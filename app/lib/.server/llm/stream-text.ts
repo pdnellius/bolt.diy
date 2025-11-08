@@ -196,7 +196,7 @@ export async function streamText(props: {
   // console.log(systemPrompt, processedMessages);
 
   return await _streamText({
-    model: provider.getModelInstance({
+    model: await provider.getModelInstance({
       model: modelDetails.name,
       serverEnv,
       apiKeys,
