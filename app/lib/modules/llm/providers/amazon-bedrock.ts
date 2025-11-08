@@ -105,6 +105,21 @@ export default class AmazonBedrockProvider extends BaseProvider {
     };
   }
 
+  /**
+   * Get a model instance with AWS credentials.
+   *
+   * Supports multiple authentication methods via AWS credential provider chain:
+   * 1. Explicit credentials in AWS_BEDROCK_CONFIG JSON
+   * 2. AWS SSO (run `aws sso login` first)
+   * 3. ECS Task Roles (automatic in ECS via container metadata)
+   * 4. EC2 Instance Profiles (automatic on EC2)
+   * 5. Lambda Execution Roles (automatic in Lambda)
+   * 6. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+   *
+   * For ECS deployments: Just set AWS_REGION or AWS_DEFAULT_REGION environment variable.
+   * The ECS task role credentials will be automatically retrieved via the container
+   * credentials provider (AWS_CONTAINER_CREDENTIALS_RELATIVE_URI).
+   */
   async getModelInstance(options: {
     model: string;
     serverEnv: any;
@@ -131,7 +146,8 @@ export default class AmazonBedrockProvider extends BaseProvider {
         // Explicit credentials provided - use them directly
         bedrockConfig = config;
       } else {
-        // Only region provided - use AWS credential provider chain (SSO support)
+        // Only region provided - use AWS credential provider chain
+        // This supports: SSO, ECS task roles, EC2 instance profiles, etc.
         const credentialsProvider = fromNodeProviderChain();
         const credentials = await credentialsProvider();
 
@@ -141,8 +157,14 @@ export default class AmazonBedrockProvider extends BaseProvider {
         };
       }
     } else {
-      // No config provided - use AWS_REGION env var and credential provider chain
-      const region = serverEnv?.AWS_REGION || process?.env?.AWS_REGION || 'us-east-1';
+      // No config provided - use AWS credential provider chain with region from env
+      // Check both AWS_REGION and AWS_DEFAULT_REGION (common in ECS/Lambda)
+      const region =
+        serverEnv?.AWS_REGION ||
+        serverEnv?.AWS_DEFAULT_REGION ||
+        process?.env?.AWS_REGION ||
+        process?.env?.AWS_DEFAULT_REGION ||
+        'us-east-1';
       const credentialsProvider = fromNodeProviderChain();
       const credentials = await credentialsProvider();
 
