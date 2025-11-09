@@ -179,7 +179,7 @@ ${slicedMessages
 
 Please provide a summary of the chat till now including the hitorical summary of the chat.
 `,
-    model: provider.getModelInstance({
+    model: await provider.getModelInstance({
       model: currentModel,
       serverEnv,
       apiKeys,
