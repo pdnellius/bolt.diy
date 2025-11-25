@@ -18,4 +18,14 @@ interface Env {
   XAI_API_KEY: string;
   PERPLEXITY_API_KEY: string;
   AWS_BEDROCK_CONFIG: string;
+  // AWS SSO / Credential Chain Configuration
+  AWS_BEDROCK_REGION: string;
+  AWS_BEDROCK_USE_CREDENTIAL_CHAIN: string;
+  AWS_REGION: string;
+  AWS_DEFAULT_REGION: string;
+  AWS_PROFILE: string;
+  // Standard AWS credentials (used by credential chain)
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
+  AWS_SESSION_TOKEN: string;
 }
