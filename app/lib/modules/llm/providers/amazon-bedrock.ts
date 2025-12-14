@@ -126,6 +126,36 @@ export default class AmazonBedrockProvider extends BaseProvider {
   }
 
   /**
+   * Checks for AWS credentials in environment variables.
+   * This is the most portable method and works in all environments including
+   * Cloudflare Workers, Docker, ECS, and serverless platforms.
+   */
+  private _getCredentialsFromEnv(serverEnv?: Record<string, string>): AWSCredentials | null {
+    const accessKeyId =
+      serverEnv?.['AWS_ACCESS_KEY_ID'] ||
+      process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey =
+      serverEnv?.['AWS_SECRET_ACCESS_KEY'] ||
+      process.env.AWS_SECRET_ACCESS_KEY;
+
+    if (accessKeyId && secretAccessKey) {
+      const sessionToken =
+        serverEnv?.['AWS_SESSION_TOKEN'] ||
+        process.env.AWS_SESSION_TOKEN;
+
+      logger.debug('Using AWS credentials from environment variables');
+
+      return {
+        accessKeyId,
+        secretAccessKey,
+        ...(sessionToken && { sessionToken }),
+      };
+    }
+
+    return null;
+  }
+
+  /**
    * Resolves AWS credentials using the default credential provider chain.
    * This supports:
    * - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
@@ -133,57 +163,96 @@ export default class AmazonBedrockProvider extends BaseProvider {
    * - SSO credentials (when user has run `aws sso login`)
    * - ECS container credentials
    * - EC2 instance metadata
+   *
+   * Note: In serverless/Cloudflare Workers environments, only environment variables
+   * and ECS container credentials (via HTTP) are typically available.
    */
-  private async _resolveCredentialsFromChain(region: string, profile?: string): Promise<AWSCredentials> {
+  private async _resolveCredentialsFromChain(
+    region: string,
+    profile?: string,
+    serverEnv?: Record<string, string>,
+  ): Promise<AWSCredentials> {
     // Check if we have valid cached credentials
     if (this._cachedCredentials && Date.now() < this._credentialsCacheExpiry) {
       logger.debug('Using cached AWS credentials');
       return this._cachedCredentials;
     }
 
+    // First, try environment variables (works everywhere)
+    const envCredentials = this._getCredentialsFromEnv(serverEnv);
+
+    if (envCredentials) {
+      this._cachedCredentials = envCredentials;
+      this._credentialsCacheExpiry = Date.now() + 5 * 60 * 1000; // Cache for 5 minutes
+
+      return envCredentials;
+    }
+
     logger.debug('Resolving AWS credentials from provider chain');
 
-    // Dynamically load the credential provider to avoid browser bundling issues
-    const fromNodeProviderChain = await this._loadCredentialProvider();
+    try {
+      // Dynamically load the credential provider to avoid browser bundling issues
+      const fromNodeProviderChain = await this._loadCredentialProvider();
 
-    const credentialProvider = fromNodeProviderChain({
-      clientConfig: { region },
-      ...(profile && { profile }),
-    });
+      const credentialProvider = fromNodeProviderChain({
+        clientConfig: { region },
+        ...(profile && { profile }),
+      });
 
-    const credentials = await credentialProvider();
+      const credentials = await credentialProvider();
 
-    if (!credentials.accessKeyId || !credentials.secretAccessKey) {
-      throw new Error(
-        'No AWS credentials found. Please run "aws sso login" or configure AWS credentials in ~/.aws/credentials',
-      );
+      if (!credentials.accessKeyId || !credentials.secretAccessKey) {
+        throw new Error('Credential provider returned empty credentials');
+      }
+
+      const resolvedCredentials: AWSCredentials = {
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        ...(credentials.sessionToken && { sessionToken: credentials.sessionToken }),
+        ...(credentials.expiration && { expiration: credentials.expiration }),
+      };
+
+      // Cache credentials for 5 minutes (or until expiry if sooner)
+      this._cachedCredentials = resolvedCredentials;
+
+      if (credentials.expiration) {
+        // Cache until 5 minutes before expiry
+        const expiryBuffer = 5 * 60 * 1000; // 5 minutes in ms
+        this._credentialsCacheExpiry = Math.min(
+          Date.now() + 5 * 60 * 1000,
+          credentials.expiration.getTime() - expiryBuffer,
+        );
+      } else {
+        // Cache for 5 minutes if no expiry
+        this._credentialsCacheExpiry = Date.now() + 5 * 60 * 1000;
+      }
+
+      logger.debug('AWS credentials resolved successfully from provider chain');
+
+      return resolvedCredentials;
+    } catch (error: any) {
+      // Provide helpful error messages based on the environment
+      const isDocker = process.env.RUNNING_IN_DOCKER === 'true';
+      const hasEcsMetadata = !!process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI;
+
+      let errorMessage = 'Failed to resolve AWS credentials. ';
+
+      if (isDocker && !hasEcsMetadata) {
+        errorMessage +=
+          'Running in Docker without ECS task role. Please either: ' +
+          '(1) Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or ' +
+          '(2) Use AWS_BEDROCK_CONFIG with explicit credentials, or ' +
+          '(3) Deploy to ECS with an IAM task role.';
+      } else if (hasEcsMetadata) {
+        errorMessage += `ECS metadata endpoint failed: ${error.message}. Check IAM task role permissions.`;
+      } else {
+        errorMessage +=
+          'Please run "aws sso login" or configure AWS credentials. ' +
+          `Details: ${error.message}`;
+      }
+
+      throw new Error(errorMessage);
     }
-
-    const resolvedCredentials: AWSCredentials = {
-      accessKeyId: credentials.accessKeyId,
-      secretAccessKey: credentials.secretAccessKey,
-      ...(credentials.sessionToken && { sessionToken: credentials.sessionToken }),
-      ...(credentials.expiration && { expiration: credentials.expiration }),
-    };
-
-    // Cache credentials for 5 minutes (or until expiry if sooner)
-    this._cachedCredentials = resolvedCredentials;
-
-    if (credentials.expiration) {
-      // Cache until 5 minutes before expiry
-      const expiryBuffer = 5 * 60 * 1000; // 5 minutes in ms
-      this._credentialsCacheExpiry = Math.min(
-        Date.now() + 5 * 60 * 1000,
-        credentials.expiration.getTime() - expiryBuffer,
-      );
-    } else {
-      // Cache for 5 minutes if no expiry
-      this._credentialsCacheExpiry = Date.now() + 5 * 60 * 1000;
-    }
-
-    logger.debug('AWS credentials resolved successfully from provider chain');
-
-    return resolvedCredentials;
   }
 
   /**
@@ -296,7 +365,7 @@ export default class AmazonBedrockProvider extends BaseProvider {
       // Pass an async function that resolves credentials
       // This will be called by the AWS SDK when making requests
       credentials: async () => {
-        const creds = await this._resolveCredentialsFromChain(region, profile);
+        const creds = await this._resolveCredentialsFromChain(region, profile, serverEnv);
         return {
           accessKeyId: creds.accessKeyId,
           secretAccessKey: creds.secretAccessKey,
